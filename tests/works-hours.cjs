@@ -1,0 +1,18 @@
+const fs=require('fs'),vm=require('vm'),assert=require('assert');
+const source=fs.readFileSync('cloud/works-hours.js','utf8');
+const start=source.indexOf('  function validHours('),end=source.indexOf('  window.TOZWorksHours=',start);
+const ctx={};vm.createContext(ctx);vm.runInContext(source.slice(start,end),ctx);
+const payload={tasks:[{title:'unrelated'}],workHours:{start:'10:00',end:'19:00'},workHoursByDate:{'2026-10-26':{start:'08:30',end:'17:30',weekendStart:'07:00'}}};
+const extracted=ctx.extract(payload);
+assert.deepEqual(JSON.parse(JSON.stringify(extracted)),{defaultHours:{start:'10:00',end:'19:00'},dates:{'2026-10-26':{start:'08:30',end:'17:30'}}});
+assert(!('tasks' in extracted));assert(!('weekendStart' in extracted.dates['2026-10-26']));
+assert.throws(()=>ctx.extract({...payload,workHours:{start:'19:00',end:'08:00'}}));
+assert.equal(ctx.extract({}).defaultHours.end,'19:00');
+assert(source.includes("{action:'read'}"));assert(!source.includes("action:'save'"));
+const html=fs.readFileSync('index.html','utf8');for(const m of html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g))if(m[1].trim())new vm.Script(m[1]);
+const hoursStart=html.indexOf('function hoursForDate('),hoursEnd=html.indexOf('\nwindow.TOZRefreshHours',hoursStart);
+ctx.workHoursByDate={'2026-10-26':{start:'09:00',end:'18:00',weekendStart:'07:00'}};ctx.isWeekendDate=()=>false;ctx.readWorkHours=()=>({});ctx.window={TOZWorksHours:{forDate:date=>extracted.dates[date]||extracted.defaultHours}};
+vm.runInContext(html.slice(hoursStart,hoursEnd),ctx);
+assert.equal(ctx.hoursForDate('2026-10-26').start,'08:30');assert.equal(ctx.hoursForDate('2026-10-26').weekendStart,'07:00');
+ctx.window.TOZWorksHours=null;assert.equal(ctx.hoursForDate('2026-10-26').start,'09:00');
+console.log('PASS: only source hours extracted, invalid times rejected, read-only requests, local day-start preserved, disconnect restores local hours.');
