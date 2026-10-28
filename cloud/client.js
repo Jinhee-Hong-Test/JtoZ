@@ -1,6 +1,6 @@
 (() => {
   const bridge=window.PWorksBridge, cfg=window.P_WORKS_CLOUD||{};
-  const empty=()=>({version:3,dayNotes:{},meetings:[],tasks:[],projects:[],projectColors:{},projectDeadlines:{},vacations:[],projectCompletions:{}});
+  const empty=()=>({version:3,journals:{},stickyNotes:[],workHoursByDate:{},dayNotes:{},meetings:[],tasks:[],projects:[],projectColors:{},projectDeadlines:{},vacations:[],projectCompletions:{}});
   const style=document.createElement('style');style.textContent=`
   .cloud-controls{margin-top:auto;padding-top:24px;display:grid;gap:8px;font-size:12px;flex-shrink:0}.cloud-controls button{font-size:var(--sidebar-button-font-size,16px);height:48px;min-height:48px;padding-top:0;padding-bottom:0;line-height:1.25}@media(max-width:720px){.main > .cloud-controls{margin:24px 16px 0;padding:20px 0 calc(24px + env(safe-area-inset-bottom,0px));width:auto}.main > .cloud-controls button{width:100%}}
   #cloud-gate{position:fixed;inset:0;z-index:10000;background:#f5f5f5;display:grid;place-items:center;padding:20px}
@@ -28,12 +28,13 @@
   }catch{alert('클라우드 설정을 확인하세요. Supabase HTTPS 주소와 publishable 또는 anon 키만 사용할 수 있습니다.');return;}
   const app=document.querySelector('.app');
   const localSnapshot=bridge.snapshot();
-  const gate=document.createElement('section');gate.id='cloud-gate';gate.innerHTML=`<form class="cloud-card" id="cloud-form"><h2>TO Z</h2><p>같은 계정으로 로그인하면 PC와 아이폰에서 업무를 함께 사용할 수 있습니다.</p><input name="email" type="email" placeholder="이메일" aria-label="이메일" autocomplete="username" required><input name="password" type="password" placeholder="비밀번호" aria-label="비밀번호" autocomplete="current-password" required><label class="remember-login"><input name="remember" type="checkbox">로그인 상태 유지</label><button class="primary" type="submit">로그인</button><div id="cloud-message" role="status"></div></form>`;document.body.append(gate);
+  const hasLocalData=payload=>['tasks','projects','vacations','meetings','stickyNotes'].some(k=>payload[k]?.length)||['journals','dayNotes','workHoursByDate','projectColors','projectDeadlines','projectCompletions'].some(k=>Object.keys(payload[k]||{}).length);
+  const gate=document.createElement('section');gate.id='cloud-gate';gate.innerHTML=`<form class="cloud-card" id="cloud-form"><h2>TO Z</h2><p>같은 계정으로 로그인하면 PC와 모바일에서 TO Z의 리스트·메모·약속·일지를 함께 사용할 수 있습니다.</p><input name="email" type="email" placeholder="이메일" aria-label="이메일" autocomplete="username" required><input name="password" type="password" placeholder="비밀번호" aria-label="비밀번호" autocomplete="current-password" required><label class="remember-login"><input name="remember" type="checkbox">로그인 상태 유지</label><button class="primary" type="submit">로그인</button><div id="cloud-message" role="status"></div></form>`;document.body.append(gate);
   let session=null,engine=null,applying=false,connecting=false,refreshing=null,releaseLock=null,lockUser=null;
-  const sessionKey='j-to-0-auth:'+base;
+  const sessionKey='toz-cloud-auth-v1:'+base;
   let rememberLogin=false;
   function clearSession(){sessionStorage.removeItem(sessionKey);localStorage.removeItem(sessionKey);}
-  const userKey=id=>'j-to-0-draft:'+base+':'+id;
+  const userKey=id=>'toz-cloud-draft-v1:'+base+':'+id;
   const lock=()=>{gate.hidden=false;app.inert=true;};
   const unlock=()=>{gate.hidden=true;app.inert=false;};
   const apply=data=>{applying=true;try{bridge.apply(structuredClone(data));}finally{applying=false;}};
@@ -58,6 +59,7 @@
     }finally{clearTimeout(timeout);}
   }
   function loginError(e,stage){
+    if(e.code==='TOZ_SETUP_REQUIRED')return 'Supabase의 toz-sync가 TO Z 동기화 응답을 보내지 않습니다. 기본 샘플 코드를 TO Z 서버 코드로 교체하고 Deploy updates를 눌러주세요.';
     const detail=e.status?' (HTTP '+e.status+(e.code?' · '+String(e.code).replace(/[^a-zA-Z0-9_]/g,'').slice(0,60):'')+')':'';
     if(e.message.startsWith('같은 계정')||e.message.startsWith('이 브라우저')||e.message.startsWith('저장된 동기화'))return e.message;
     if(stage==='auth'){
@@ -66,10 +68,10 @@
       return '로그인 인증 단계에서 실패했습니다. Supabase 계정·공개키 또는 네트워크 연결을 확인해주세요.'+detail;
     }
     if(e.code==='ORIGIN_DENIED')return '로그인은 성공했지만 사이트 주소가 허용되지 않았습니다. ALLOWED_ORIGINS 설정을 확인해주세요.'+detail;
-    if(e.code==='FORBIDDEN')return '로그인은 성공했지만 사용 권한이 없습니다. pworks_allowed_users의 User UID를 확인해주세요.'+detail;
-    if(e.status===404)return '로그인은 성공했지만 pworks-sync 서버 함수를 찾지 못했습니다. 함수 이름과 배포 상태를 확인해주세요.'+detail;
+    if(e.code==='FORBIDDEN')return '로그인은 성공했지만 사용 권한이 없습니다. toz_allowed_users의 User UID를 확인해주세요.'+detail;
+    if(e.status===404)return 'TO Z 서버 설정이 아직 완료되지 않았습니다. cloud/SETUP.md에 따라 toz-sync 함수를 배포해주세요.'+detail;
     if(e.status===401)return '로그인은 성공했지만 서버 함수가 로그인 토큰을 거부했습니다. Edge Function의 JWT 설정을 확인해야 합니다.'+detail;
-    if(e.status>=500)return '로그인은 성공했지만 서버 함수 실행에 실패했습니다. pworks-sync의 Logs를 확인해주세요.'+detail;
+    if(e.status>=500)return '로그인은 성공했지만 서버 함수 실행에 실패했습니다. toz-sync의 Logs를 확인해주세요.'+detail;
     return '로그인은 성공했지만 동기화 연결에 실패했습니다. 서버 함수의 CORS 설정·네트워크 연결을 확인해주세요.'+detail;
   }
   function storeSession(s){
@@ -84,8 +86,8 @@
     await refreshing;return session.access_token;
   }
   const edge=async body=>{
-    const result=await request('/functions/v1/pworks-sync',body,await token());
-    if(!result.ok||!result.data||!Number.isInteger(result.data.revision))throw Error('Invalid server response');
+    const result=await request('/functions/v1/'+(cfg.functionName||'toz-sync'),body,await token());
+    if(!result?.ok||!result.data||!Number.isInteger(result.data.revision)){const e=Error('TO Z 서버 코드 설정이 필요합니다.');e.code='TOZ_SETUP_REQUIRED';throw e;}
     return result.data;
   };
   const read=()=>edge({action:'read'});
@@ -98,7 +100,7 @@
     if(!navigator.locks)throw Error('이 브라우저는 안전한 동기화를 지원하지 않습니다. 최신 Safari 또는 Chrome을 사용해주세요.');
     const user=session.user.id;
     await new Promise((resolve,reject)=>{
-      navigator.locks.request('j-to-0:'+base+':'+user,{ifAvailable:true},async lock=>{
+      navigator.locks.request('toz-cloud:'+base+':'+user,{ifAvailable:true},async lock=>{
         if(!lock){reject(Error('같은 계정의 TO Z가 다른 탭에 열려 있습니다. 다른 탭을 닫고 다시 로그인해주세요.'));return;}
         await new Promise(release=>{releaseLock=release;lockUser=user;resolve();});
       }).catch(reject);
@@ -110,11 +112,12 @@
     const raw=localStorage.getItem(key);
     if(raw){try{cached=JSON.parse(raw);if(!Number.isInteger(cached.revision)||cached.revision<0||!cached.payload)throw Error();}catch{throw Error('저장된 동기화 초안을 읽지 못했습니다. 저장소를 지우지 말고 문의해주세요.');}}
     const row=await read();
-    const initial=cached&&(cached.dirty||cached.pending)?cached:{revision:row.revision,payload:row.payload,pending:null,dirty:false};
+    const localImport=!cached&&row.revision===0&&hasLocalData(localSnapshot);
+    const initial=cached&&(cached.dirty||cached.pending)?cached:{revision:row.revision,payload:localImport?localSnapshot:row.payload,pending:null,dirty:localImport};
     apply(initial.payload);
     const nextEngine=new window.PWorksSyncEngine({read,write,apply,persist:s=>localStorage.setItem(key,JSON.stringify(s)),status:setStatus,uuid:()=>crypto.randomUUID(),initial});
     engine=nextEngine;unlock();$('cloud-login').hidden=true;$('cloud-logout').hidden=false;
-    $('cloud-migrate').hidden=!(localSnapshot.tasks.length||localSnapshot.projects.length||localSnapshot.vacations.length||localSnapshot.meetings?.length||Object.keys(localSnapshot.dayNotes||{}).length);
+    $('cloud-migrate').hidden=localImport||!hasLocalData(localSnapshot);
     $('cloud-message').textContent='';
     await engine.tick();
   }

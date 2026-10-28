@@ -6,7 +6,7 @@ import zipfile
 root=Path(__file__).resolve().parents[1]
 subprocess.run([sys.executable,str(root/'scripts/build_site.py')],check=True)
 assets=[p for p in (root/'_site').rglob('*') if p.is_file()]
-extras=['README.md','.gitignore','.github/workflows/pages.yml','scripts/build_site.py','scripts/package_release.py','cloud/SETUP.md','cloud/schema.sql','tests/cloud-sync.cjs','tests/edge-sync.cjs','tests/remember-login.cjs','tests/works-hours.cjs','supabase/functions/pworks-sync/index.ts']
+extras=['README.md','.gitignore','.github/workflows/pages.yml','scripts/build_site.py','scripts/package_release.py','cloud/SETUP.md','cloud/schema.sql','tests/cloud-sync.cjs','tests/edge-sync.cjs','tests/remember-login.cjs','tests/works-hours.cjs','supabase/functions/pworks-sync/index.ts','supabase/functions/toz-sync/index.ts','tests/toz-isolation.cjs']
 for name in ['J-TO-0']:
     for kind in ['site','GitHub-Pages']:
         with zipfile.ZipFile(root/f'{name}-{kind}.zip','w',zipfile.ZIP_DEFLATED) as z:

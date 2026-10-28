@@ -1,6 +1,6 @@
 (() => {
   const cfg=window.TOZ_WORKS_SOURCE;if(!cfg)return;
-  const oldLogin=document.getElementById('cloud-login');if(oldLogin)oldLogin.hidden=true;
+  
   const key='to-z-works-hours-session-v1',cacheKey='to-z-works-hours-cache-v1';
   let session=null,cache=null,busy=false,remember=false,refreshing=null;
   const controls=document.createElement('div');controls.className='cloud-controls';

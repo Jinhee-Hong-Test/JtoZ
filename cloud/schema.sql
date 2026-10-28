@@ -1,9 +1,9 @@
 -- Run the entire file in SQL Editor. Existing documents are preserved.
 begin;
-create table if not exists public.pworks_allowed_users (
+create table if not exists public.toz_allowed_users (
  user_id uuid primary key references auth.users(id) on delete cascade
 );
-create table if not exists public.pworks_documents (
+create table if not exists public.toz_documents (
   user_id uuid primary key references auth.users(id) on delete cascade,
   revision integer not null default 0 check (revision >= 0),
   mutation_id uuid,
@@ -19,12 +19,12 @@ create table if not exists public.pworks_documents (
   )
 );
 
-alter table public.pworks_allowed_users enable row level security;
-alter table public.pworks_documents enable row level security;
-revoke all on public.pworks_allowed_users, public.pworks_documents from public, anon, authenticated;
-drop policy if exists own_allowlist on public.pworks_allowed_users;
-drop policy if exists own_document on public.pworks_documents;
-drop function if exists public.pworks_save(integer,jsonb,uuid);
+alter table public.toz_allowed_users enable row level security;
+alter table public.toz_documents enable row level security;
+revoke all on public.toz_allowed_users, public.toz_documents from public, anon, authenticated;
+drop policy if exists own_allowlist on public.toz_allowed_users;
+drop policy if exists own_document on public.toz_documents;
+drop function if exists public.toz_save(integer,jsonb,uuid);
 commit;
 -- Add your Auth UUID separately after creating your login account.
--- insert into public.pworks_allowed_users(user_id) values ('YOUR-USER-UUID') on conflict do nothing;
+-- insert into public.toz_allowed_users(user_id) values ('YOUR-USER-UUID') on conflict do nothing;
